@@ -42,7 +42,7 @@ interface Store {
   updateClass: (classId: string, updatedClass: Partial<Class>, updateRecurring: boolean) => Promise<void>;
   deleteClass: (classId: string, deleteRecurring: boolean) => Promise<void>;
   enrollInClass: (classId: string, userId: string, enrollAll: boolean) => Promise<void>;
-  unenrollFromClass: (classId: string, userId: string) => Promise<void>;
+  unenrollFromClass: (classId: string, userId: string, unenrollAll: boolean) => Promise<void>;
   fetchClasses: () => Promise<void>;
   fetchSchools: () => Promise<School[]>;
   fetchCurrentSchool: () => Promise<void>;
@@ -52,7 +52,7 @@ interface Store {
   updateProfile: (data: {
     name: string;
     email: string;
-    currentPassword: string;
+    currentPassword?: string;
     newPassword?: string;
   }) => Promise<void>;
 }
@@ -153,36 +153,42 @@ export const useStore = create<Store>((set, get) => ({
     if (!user || !auth.currentUser) throw new Error('Utilisateur non connecté');
 
     try {
-      const credential = EmailAuthProvider.credential(
-        auth.currentUser.email!,
-        currentPassword
-      );
-      await reauthenticateWithCredential(auth.currentUser, credential);
+      const updates: any = { name };
+      
+      // Si l'email ou le mot de passe change, on a besoin de réauthentifier
+      if (email !== user.email || newPassword) {
+        if (!currentPassword) {
+          throw new Error('Mot de passe actuel requis pour modifier email ou mot de passe');
+        }
+        
+        const credential = EmailAuthProvider.credential(
+          auth.currentUser.email!,
+          currentPassword
+        );
+        await reauthenticateWithCredential(auth.currentUser, credential);
 
-      if (email !== user.email) {
-        await updateEmail(auth.currentUser, email);
-      }
+        if (email !== user.email) {
+          await updateEmail(auth.currentUser, email);
+          updates.email = email;
+        }
 
-      if (newPassword) {
-        await updatePassword(auth.currentUser, newPassword);
+        if (newPassword) {
+          await updatePassword(auth.currentUser, newPassword);
+        }
       }
 
       const userRef = doc(db, 'users', user.id);
-      await updateDoc(userRef, {
-        name,
-        email,
-      });
+      await updateDoc(userRef, updates);
 
       set({
         user: {
           ...user,
-          name,
-          email,
+          ...updates,
         },
       });
     } catch (error) {
       console.error('Error updating profile:', error);
-      throw new Error('Erreur lors de la mise à jour du profil. Vérifiez votre mot de passe.');
+      throw error;
     }
   },
 
@@ -309,11 +315,10 @@ export const useStore = create<Store>((set, get) => ({
       const classData = classDoc.data() as Class;
 
       if (enrollAll && classData.baseId) {
-        const now = new Date();
         const classesQuery = query(
           collection(db, 'classes'),
           where('baseId', '==', classData.baseId),
-          where('datetime', '>=', now.toISOString())
+          where('datetime', '>=', classData.datetime)
         );
         
         const snapshot = await getDocs(classesQuery);
@@ -339,12 +344,40 @@ export const useStore = create<Store>((set, get) => ({
     }
   },
 
-  unenrollFromClass: async (classId, userId) => {
+  unenrollFromClass: async (classId, userId, unenrollAll) => {
     try {
       const classRef = doc(db, 'classes', classId);
-      await updateDoc(classRef, {
-        enrolledStudents: arrayRemove(userId)
-      });
+      const classDoc = await getDoc(classRef);
+      
+      if (!classDoc.exists()) {
+        throw new Error('Class not found');
+      }
+
+      const classData = classDoc.data() as Class;
+
+      if (unenrollAll && classData.baseId) {
+        const classesQuery = query(
+          collection(db, 'classes'),
+          where('baseId', '==', classData.baseId),
+          where('datetime', '>=', classData.datetime)
+        );
+        
+        const snapshot = await getDocs(classesQuery);
+        const batch = writeBatch(db);
+        
+        snapshot.docs.forEach((doc) => {
+          batch.update(doc.ref, {
+            enrolledStudents: arrayRemove(userId)
+          });
+        });
+        
+        await batch.commit();
+      } else {
+        await updateDoc(classRef, {
+          enrolledStudents: arrayRemove(userId)
+        });
+      }
+      
       await get().fetchClasses();
     } catch (error) {
       console.error('Error unenrolling from class:', error);

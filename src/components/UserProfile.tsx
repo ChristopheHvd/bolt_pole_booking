@@ -5,47 +5,71 @@ import { z } from 'zod';
 import { useStore } from '../store/useStore';
 import { Loader2 } from 'lucide-react';
 
-const profileSchema = z.object({
+const createProfileSchema = (initialEmail: string) => z.object({
   name: z.string().min(2, 'Le nom doit faire au moins 2 caractères'),
   email: z.string().email('Email invalide'),
-  currentPassword: z.string().min(1, 'Mot de passe actuel requis'),
-  newPassword: z.string().min(6, 'Le nouveau mot de passe doit faire au moins 6 caractères').optional(),
+  currentPassword: z.string().optional(),
+  newPassword: z.string().optional(),
   confirmPassword: z.string().optional(),
-}).refine((data) => {
-  if (data.newPassword && data.newPassword !== data.confirmPassword) {
-    return false;
+}).superRefine((data, ctx) => {
+  // Le mot de passe actuel est requis uniquement si l'email est modifié ou si un nouveau mot de passe est fourni
+  if ((data.email !== initialEmail || data.newPassword) && !data.currentPassword) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Le mot de passe actuel est requis pour changer l'email ou le mot de passe",
+      path: ['currentPassword'],
+    });
   }
-  return true;
-}, {
-  message: "Les mots de passe ne correspondent pas",
-  path: ["confirmPassword"],
+
+  // Valider le nouveau mot de passe uniquement s'il est fourni
+  if (data.newPassword) {
+    if (data.newPassword.length < 6) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Le nouveau mot de passe doit faire au moins 6 caractères",
+        path: ['newPassword'],
+      });
+    }
+    
+    if (data.newPassword !== data.confirmPassword) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Les mots de passe ne correspondent pas",
+        path: ['confirmPassword'],
+      });
+    }
+  }
 });
 
-type ProfileInputs = z.infer<typeof profileSchema>;
+type ProfileInputs = z.infer<ReturnType<typeof createProfileSchema>>;
 
 export function UserProfile() {
   const { user, updateProfile } = useStore();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState(false);
+  const initialEmail = user?.email || '';
 
   const {
     register,
     handleSubmit,
     formState: { errors },
     watch,
+    reset,
   } = useForm<ProfileInputs>({
-    resolver: zodResolver(profileSchema),
+    resolver: zodResolver(createProfileSchema(initialEmail)),
     defaultValues: {
       name: user?.name || '',
-      email: user?.email || '',
+      email: initialEmail,
       currentPassword: '',
       newPassword: '',
       confirmPassword: '',
     },
   });
 
+  const email = watch('email');
   const newPassword = watch('newPassword');
+  const needsPassword = email !== initialEmail || newPassword;
 
   const onSubmit = async (data: ProfileInputs) => {
     try {
@@ -57,10 +81,16 @@ export function UserProfile() {
         name: data.name,
         email: data.email,
         currentPassword: data.currentPassword,
-        newPassword: data.newPassword || undefined,
+        newPassword: data.newPassword,
       });
       
       setSuccess(true);
+      reset({
+        ...data,
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Une erreur est survenue');
     } finally {
@@ -101,19 +131,21 @@ export function UserProfile() {
           )}
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700">
-            Mot de passe actuel
-            <input
-              type="password"
-              {...register('currentPassword')}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
-            />
-          </label>
-          {errors.currentPassword && (
-            <p className="mt-1 text-sm text-red-600">{errors.currentPassword.message}</p>
-          )}
-        </div>
+        {needsPassword && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Mot de passe actuel (requis pour changer l'email ou le mot de passe)
+              <input
+                type="password"
+                {...register('currentPassword')}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
+              />
+            </label>
+            {errors.currentPassword && (
+              <p className="mt-1 text-sm text-red-600">{errors.currentPassword.message}</p>
+            )}
+          </div>
+        )}
 
         <div>
           <label className="block text-sm font-medium text-gray-700">

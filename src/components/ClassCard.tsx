@@ -5,6 +5,7 @@ import { Users, Clock, CalendarCheck, Repeat, Edit2, Trash2, Loader2 } from 'luc
 import { Class, ClassFormData } from '../types';
 import { useStore } from '../store/useStore';
 import { ClassForm } from './ClassForm';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface ClassCardProps {
   classData: Class;
@@ -15,11 +16,14 @@ export function ClassCard({ classData }: ClassCardProps) {
   const [isEditing, setIsEditing] = React.useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
   const [showEnrollConfirm, setShowEnrollConfirm] = React.useState(false);
+  const [showUnenrollConfirm, setShowUnenrollConfirm] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(false);
   const [isDeletingOne, setIsDeletingOne] = React.useState(false);
   const [isDeletingAll, setIsDeletingAll] = React.useState(false);
   const [isEnrollingOne, setIsEnrollingOne] = React.useState(false);
   const [isEnrollingAll, setIsEnrollingAll] = React.useState(false);
+  const [isUnenrollingOne, setIsUnenrollingOne] = React.useState(false);
+  const [isUnenrollingAll, setIsUnenrollingAll] = React.useState(false);
   
   const isEnrolled = user && classData.enrolledStudents.includes(user.id);
   const isFull = classData.enrolledStudents.length >= classData.maxStudents;
@@ -36,15 +40,29 @@ export function ClassCard({ classData }: ClassCardProps) {
         setIsEnrollingOne(true);
       }
 
-      if (isEnrolled) {
-        await unenrollFromClass(classData.id, user.id);
-      } else {
-        await enrollInClass(classData.id, user.id, enrollAll);
-      }
+      await enrollInClass(classData.id, user.id, enrollAll);
       setShowEnrollConfirm(false);
     } finally {
       setIsEnrollingAll(false);
       setIsEnrollingOne(false);
+    }
+  };
+
+  const handleUnenrollment = async (unenrollAll: boolean = false) => {
+    if (!user) return;
+    
+    try {
+      if (unenrollAll) {
+        setIsUnenrollingAll(true);
+      } else {
+        setIsUnenrollingOne(true);
+      }
+
+      await unenrollFromClass(classData.id, user.id, unenrollAll);
+      setShowUnenrollConfirm(false);
+    } finally {
+      setIsUnenrollingAll(false);
+      setIsUnenrollingOne(false);
     }
   };
 
@@ -112,99 +130,50 @@ export function ClassCard({ classData }: ClassCardProps) {
   return (
     <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow relative">
       {showDeleteConfirm && (
-        <div className="absolute inset-0 bg-white rounded-lg p-6 z-10">
-          <h4 className="text-lg font-semibold text-red-600 mb-4">Confirmation de suppression</h4>
-          <p className="text-sm text-gray-700 mb-6">
-            {classData.baseId
-              ? "Voulez-vous supprimer uniquement ce cours ou tous les prochains cours récurrents ?"
-              : "Êtes-vous sûr de vouloir supprimer ce cours ?"}
-          </p>
-          <div className="flex flex-col space-y-2">
-            {classData.baseId && (
-              <button
-                onClick={() => handleDelete(false)}
-                disabled={isDeletingOne || isDeletingAll}
-                className="w-full px-3 py-2 text-sm font-medium bg-white text-red-600 border border-red-600 rounded-md hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isDeletingOne ? (
-                  <span className="flex items-center justify-center">
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Suppression...
-                  </span>
-                ) : (
-                  "Ce cours uniquement"
-                )}
-              </button>
-            )}
-            <button
-              onClick={() => handleDelete(true)}
-              disabled={isDeletingOne || isDeletingAll}
-              className="w-full px-3 py-2 text-sm font-medium bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isDeletingAll ? (
-                <span className="flex items-center justify-center">
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Suppression...
-                </span>
-              ) : (
-                classData.baseId ? "Tous les prochains cours" : "Supprimer"
-              )}
-            </button>
-            <button
-              onClick={() => setShowDeleteConfirm(false)}
-              disabled={isDeletingOne || isDeletingAll}
-              className="w-full px-3 py-2 text-sm font-medium bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Annuler
-            </button>
-          </div>
-        </div>
+        <ConfirmDialog
+          title="Confirmation de suppression"
+          message={classData.baseId
+            ? "Voulez-vous supprimer uniquement ce cours ou tous les prochains cours récurrents ?"
+            : "Êtes-vous sûr de vouloir supprimer ce cours ?"}
+          onConfirmOne={() => handleDelete(false)}
+          onConfirmAll={() => handleDelete(true)}
+          onClose={() => setShowDeleteConfirm(false)}
+          confirmOneText="Ce cours uniquement"
+          confirmAllText={classData.baseId ? "Tous les prochains cours" : "Supprimer"}
+          isLoadingOne={isDeletingOne}
+          isLoadingAll={isDeletingAll}
+          variant="danger"
+        />
       )}
 
       {showEnrollConfirm && !isEnrolled && classData.baseId && (
-        <div className="absolute inset-0 bg-white rounded-lg p-6 z-10">
-          <h4 className="text-lg font-semibold text-purple-600 mb-4">Confirmation d'inscription</h4>
-          <p className="text-sm text-gray-700 mb-6">
-            Voulez-vous vous inscrire uniquement à ce cours ou à tous les prochains cours récurrents ?
-          </p>
-          <div className="flex flex-col space-y-2">
-            <button
-              onClick={() => handleEnrollment(false)}
-              disabled={isEnrollingOne || isEnrollingAll}
-              className="w-full px-3 py-2 text-sm font-medium bg-white text-purple-600 border border-purple-600 rounded-md hover:bg-purple-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isEnrollingOne ? (
-                <span className="flex items-center justify-center">
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Inscription...
-                </span>
-              ) : (
-                "Ce cours uniquement"
-              )}
-            </button>
-            <button
-              onClick={() => handleEnrollment(true)}
-              disabled={isEnrollingOne || isEnrollingAll}
-              className="w-full px-3 py-2 text-sm font-medium bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isEnrollingAll ? (
-                <span className="flex items-center justify-center">
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Inscription...
-                </span>
-              ) : (
-                "Tous les prochains cours"
-              )}
-            </button>
-            <button
-              onClick={() => setShowEnrollConfirm(false)}
-              disabled={isEnrollingOne || isEnrollingAll}
-              className="w-full px-3 py-2 text-sm font-medium bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Annuler
-            </button>
-          </div>
-        </div>
+        <ConfirmDialog
+          title="Inscription"
+          message="Voulez-vous vous inscrire uniquement à ce cours ou à tous les prochains cours récurrents ?"
+          onConfirmOne={() => handleEnrollment(false)}
+          onConfirmAll={() => handleEnrollment(true)}
+          onClose={() => setShowEnrollConfirm(false)}
+          confirmOneText="Ce cours uniquement"
+          confirmAllText="Tous les prochains cours"
+          isLoadingOne={isEnrollingOne}
+          isLoadingAll={isEnrollingAll}
+          variant="primary"
+        />
+      )}
+
+      {showUnenrollConfirm && isEnrolled && classData.baseId && (
+        <ConfirmDialog
+          title="Désinscription"
+          message="Voulez-vous vous désinscrire uniquement de ce cours ou de tous les prochains cours récurrents ?"
+          onConfirmOne={() => handleUnenrollment(false)}
+          onConfirmAll={() => handleUnenrollment(true)}
+          onClose={() => setShowUnenrollConfirm(false)}
+          confirmOneText="Ce cours uniquement"
+          confirmAllText="Tous les prochains cours"
+          isLoadingOne={isUnenrollingOne}
+          isLoadingAll={isUnenrollingAll}
+          variant="danger"
+        />
       )}
 
       <div className="flex justify-between items-start mb-4">
@@ -269,10 +238,18 @@ export function ClassCard({ classData }: ClassCardProps) {
       {user?.role === 'student' && (
         <button
           onClick={() => {
-            if (isEnrolled || !classData.baseId) {
-              handleEnrollment(false);
-            } else {
-              setShowEnrollConfirm(true);
+            if (isEnrolled) {
+              if (classData.baseId) {
+                setShowUnenrollConfirm(true);
+              } else {
+                handleUnenrollment(false);
+              }
+            } else if (!isFull) {
+              if (classData.baseId) {
+                setShowEnrollConfirm(true);
+              } else {
+                handleEnrollment(false);
+              }
             }
           }}
           disabled={(!isEnrolled && isFull) || isLoading}

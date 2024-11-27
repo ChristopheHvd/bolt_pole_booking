@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import { User, Class, School } from '../types';
-import { parseISO, addYears } from 'date-fns';
+import { User, Class, School, StudentCredit, StudentSubscription } from '../types';
+import { parseISO, addYears, addMonths } from 'date-fns';
 import { generateRecurringDates } from '../utils/dateUtils';
 import { 
   collection, 
@@ -47,7 +47,9 @@ interface Store {
   fetchSchools: () => Promise<School[]>;
   fetchCurrentSchool: () => Promise<void>;
   createSchool: (schoolData: Omit<School, 'id' | 'teacherIds'>) => Promise<void>;
+  updateSchool: (schoolData: Omit<School, 'id' | 'teacherIds'>) => Promise<void>;
   updateUserSchool: (userId: string, schoolId: string) => Promise<void>;
+  leaveSchool: () => Promise<void>;
   initializeAuthListener: () => void;
   updateProfile: (data: {
     name: string;
@@ -55,6 +57,8 @@ interface Store {
     currentPassword?: string;
     newPassword?: string;
   }) => Promise<void>;
+  updateStudentCredits: (studentId: string, update: StudentCredit | StudentSubscription) => Promise<void>;
+  fetchSchoolStudents: (schoolId: string) => Promise<User[]>;
 }
 
 export const useStore = create<Store>((set, get) => ({
@@ -148,50 +152,6 @@ export const useStore = create<Store>((set, get) => ({
     }
   },
 
-  updateProfile: async ({ name, email, currentPassword, newPassword }) => {
-    const user = get().user;
-    if (!user || !auth.currentUser) throw new Error('Utilisateur non connecté');
-
-    try {
-      const updates: any = { name };
-      
-      // Si l'email ou le mot de passe change, on a besoin de réauthentifier
-      if (email !== user.email || newPassword) {
-        if (!currentPassword) {
-          throw new Error('Mot de passe actuel requis pour modifier email ou mot de passe');
-        }
-        
-        const credential = EmailAuthProvider.credential(
-          auth.currentUser.email!,
-          currentPassword
-        );
-        await reauthenticateWithCredential(auth.currentUser, credential);
-
-        if (email !== user.email) {
-          await updateEmail(auth.currentUser, email);
-          updates.email = email;
-        }
-
-        if (newPassword) {
-          await updatePassword(auth.currentUser, newPassword);
-        }
-      }
-
-      const userRef = doc(db, 'users', user.id);
-      await updateDoc(userRef, updates);
-
-      set({
-        user: {
-          ...user,
-          ...updates,
-        },
-      });
-    } catch (error) {
-      console.error('Error updating profile:', error);
-      throw error;
-    }
-  },
-
   addClass: async (newClass) => {
     try {
       const classRef = doc(collection(db, 'classes'));
@@ -239,11 +199,10 @@ export const useStore = create<Store>((set, get) => ({
       const classData = classDoc.data() as Class;
 
       if (updateRecurring && classData.baseId) {
-        const now = new Date();
         const classesQuery = query(
           collection(db, 'classes'),
           where('baseId', '==', classData.baseId),
-          where('datetime', '>=', now.toISOString())
+          where('datetime', '>=', classData.datetime)
         );
         
         const snapshot = await getDocs(classesQuery);
@@ -277,11 +236,10 @@ export const useStore = create<Store>((set, get) => ({
       const classData = classDoc.data() as Class;
 
       if (deleteRecurring && classData.baseId) {
-        const now = new Date();
         const classesQuery = query(
           collection(db, 'classes'),
           where('baseId', '==', classData.baseId),
-          where('datetime', '>=', now.toISOString())
+          where('datetime', '>=', classData.datetime)
         );
         
         const snapshot = await getDocs(classesQuery);
@@ -473,6 +431,30 @@ export const useStore = create<Store>((set, get) => ({
     }
   },
 
+  updateSchool: async (schoolData) => {
+    try {
+      const user = get().user;
+      const school = get().school;
+      if (!user || !school) throw new Error('User not authenticated or no school selected');
+
+      const schoolRef = doc(db, 'schools', school.id);
+      await updateDoc(schoolRef, {
+        ...schoolData,
+        teacherIds: school.teacherIds,
+      });
+
+      set({
+        school: {
+          ...school,
+          ...schoolData,
+        },
+      });
+    } catch (error) {
+      console.error('Error updating school:', error);
+      throw error;
+    }
+  },
+
   updateUserSchool: async (userId, schoolId) => {
     try {
       await updateDoc(doc(db, 'users', userId), {
@@ -497,6 +479,154 @@ export const useStore = create<Store>((set, get) => ({
       }
     } catch (error) {
       console.error('Error updating user school:', error);
+      throw error;
+    }
+  },
+
+  leaveSchool: async () => {
+    try {
+      const user = get().user;
+      const school = get().school;
+      if (!user || !school) throw new Error('User not authenticated or no school selected');
+
+      // Get all classes where the user is enrolled
+      const classesQuery = query(
+        collection(db, 'classes'),
+        where('schoolId', '==', school.id),
+        where('enrolledStudents', 'array-contains', user.id)
+      );
+      
+      const snapshot = await getDocs(classesQuery);
+      const batch = writeBatch(db);
+
+      // Remove user from all enrolled classes
+      snapshot.docs.forEach((doc) => {
+        batch.update(doc.ref, {
+          enrolledStudents: arrayRemove(user.id)
+        });
+      });
+
+      // Remove schoolId from user
+      batch.update(doc(db, 'users', user.id), {
+        schoolId: null
+      });
+
+      await batch.commit();
+
+      set({
+        user: {
+          ...user,
+          schoolId: undefined
+        },
+        school: null
+      });
+    } catch (error) {
+      console.error('Error leaving school:', error);
+      throw error;
+    }
+  },
+
+  updateProfile: async ({ name, email, currentPassword, newPassword }) => {
+    const user = get().user;
+    if (!user || !auth.currentUser) throw new Error('Utilisateur non connecté');
+
+    try {
+      const updates: any = { name };
+      
+      if ((email !== user.email || newPassword) && currentPassword) {
+        const credential = EmailAuthProvider.credential(
+          auth.currentUser.email!,
+          currentPassword
+        );
+        await reauthenticateWithCredential(auth.currentUser, credential);
+
+        if (email !== user.email) {
+          await updateEmail(auth.currentUser, email);
+          updates.email = email;
+        }
+
+        if (newPassword) {
+          await updatePassword(auth.currentUser, newPassword);
+        }
+      }
+
+      const userRef = doc(db, 'users', user.id);
+      await updateDoc(userRef, updates);
+
+      set({
+        user: {
+          ...user,
+          ...updates,
+        },
+      });
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      throw error;
+    }
+  },
+
+  updateStudentCredits: async (studentId: string, update: StudentCredit | StudentSubscription) => {
+    try {
+      const userRef = doc(db, 'users', studentId);
+      
+      if (update.type === 'credits') {
+        await updateDoc(userRef, {
+          credits: update.amount,
+          subscription: {
+            type: 'pay-as-you-go',
+            startDate: new Date().toISOString(),
+            endDate: new Date(2099, 11, 31).toISOString(),
+          }
+        });
+      } else {
+        const startDate = new Date();
+        let endDate: Date;
+        
+        switch (update.plan) {
+          case 'monthly':
+            endDate = addMonths(startDate, 1);
+            break;
+          case 'quarterly':
+            endDate = addMonths(startDate, 3);
+            break;
+          case 'yearly':
+            endDate = addYears(startDate, 1);
+            break;
+          case 'pay-as-you-go':
+            endDate = new Date(2099, 11, 31);
+            break;
+        }
+
+        await updateDoc(userRef, {
+          subscription: {
+            type: update.plan,
+            startDate: startDate.toISOString(),
+            endDate: endDate.toISOString()
+          },
+          credits: update.plan === 'pay-as-you-go' ? 0 : 999
+        });
+      }
+    } catch (error) {
+      console.error('Error updating student credits:', error);
+      throw error;
+    }
+  },
+
+  fetchSchoolStudents: async (schoolId: string) => {
+    try {
+      const studentsQuery = query(
+        collection(db, 'users'),
+        where('schoolId', '==', schoolId),
+        where('role', '==', 'student')
+      );
+      
+      const snapshot = await getDocs(studentsQuery);
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as User[];
+    } catch (error) {
+      console.error('Error fetching school students:', error);
       throw error;
     }
   },

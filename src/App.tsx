@@ -6,10 +6,12 @@ import { TeacherDashboard } from './pages/TeacherDashboard';
 import { StudentDashboard } from './pages/StudentDashboard';
 import { AuthForm } from './components/AuthForm';
 import { UserProfile } from './components/UserProfile';
+import { SchoolDetails } from './components/SchoolDetails';
 
 export default function App() {
   const { user, school, signIn, signUp, signOut, isLoading, initializeAuthListener } = useStore();
   const [showProfile, setShowProfile] = useState(false);
+  const [showSchoolDetails, setShowSchoolDetails] = useState(false);
 
   useEffect(() => {
     initializeAuthListener();
@@ -29,7 +31,7 @@ export default function App() {
       }
     } catch (error) {
       console.error('Authentication error:', error);
-      alert('Erreur d\'authentification. Veuillez réessayer.');
+      alert('Email ou mot de passe incorrect');
     }
   };
 
@@ -56,9 +58,12 @@ export default function App() {
                   Pole Booking
                 </Link>
                 {school && (
-                  <span className="ml-4 px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm">
+                  <button
+                    onClick={() => setShowSchoolDetails(true)}
+                    className="ml-4 px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm hover:bg-purple-200 transition-colors"
+                  >
                     {school.name}
-                  </span>
+                  </button>
                 )}
               </div>
               <div className="flex items-center">
@@ -127,6 +132,10 @@ export default function App() {
             )}
           </div>
         </main>
+
+        {showSchoolDetails && school && (
+          <SchoolDetails onClose={() => setShowSchoolDetails(false)} />
+        )}
       </div>
     </Router>
   );

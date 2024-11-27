@@ -5,12 +5,12 @@ interface ConfirmDialogProps {
   title: string;
   message: string;
   onConfirmOne: () => void;
-  onConfirmAll: () => void;
+  onConfirmAll?: () => void;
   onClose: () => void;
   confirmOneText: string;
-  confirmAllText: string;
+  confirmAllText?: string;
   isLoadingOne: boolean;
-  isLoadingAll: boolean;
+  isLoadingAll?: boolean;
   variant?: 'primary' | 'danger';
 }
 
@@ -55,35 +55,54 @@ export function ConfirmDialog({
       <p className="text-sm text-gray-700 mb-6">{message}</p>
       
       <div className="flex flex-col space-y-3">
-        <button
-          onClick={onConfirmOne}
-          disabled={isLoadingOne || isLoadingAll}
-          className={`w-full px-4 py-2 text-sm font-medium border rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${colorClasses.buttonOutline}`}
-        >
-          {isLoadingOne ? (
-            <span className="flex items-center justify-center">
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Chargement...
-            </span>
-          ) : (
-            confirmOneText
-          )}
-        </button>
-        
-        <button
-          onClick={onConfirmAll}
-          disabled={isLoadingOne || isLoadingAll}
-          className={`w-full px-4 py-2 text-sm font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${colorClasses.buttonFilled}`}
-        >
-          {isLoadingAll ? (
-            <span className="flex items-center justify-center">
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Chargement...
-            </span>
-          ) : (
-            confirmAllText
-          )}
-        </button>
+        {onConfirmAll && confirmAllText ? (
+          <>
+            <button
+              onClick={onConfirmOne}
+              disabled={isLoadingOne || isLoadingAll}
+              className={`w-full px-4 py-2 text-sm font-medium border rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${colorClasses.buttonOutline}`}
+            >
+              {isLoadingOne ? (
+                <span className="flex items-center justify-center">
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Chargement...
+                </span>
+              ) : (
+                confirmOneText
+              )}
+            </button>
+            
+            <button
+              onClick={onConfirmAll}
+              disabled={isLoadingOne || isLoadingAll}
+              className={`w-full px-4 py-2 text-sm font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${colorClasses.buttonFilled}`}
+            >
+              {isLoadingAll ? (
+                <span className="flex items-center justify-center">
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Chargement...
+                </span>
+              ) : (
+                confirmAllText
+              )}
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={onConfirmOne}
+            disabled={isLoadingOne}
+            className={`w-full px-4 py-2 text-sm font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${colorClasses.buttonFilled}`}
+          >
+            {isLoadingOne ? (
+              <span className="flex items-center justify-center">
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Chargement...
+              </span>
+            ) : (
+              confirmOneText
+            )}
+          </button>
+        )}
       </div>
     </div>
   );

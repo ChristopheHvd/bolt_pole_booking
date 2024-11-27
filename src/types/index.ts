@@ -4,6 +4,13 @@ export interface User {
   name: string;
   role: 'student' | 'teacher';
   schoolId?: string;
+  credits?: number;
+  subscription?: {
+    type: 'monthly' | 'quarterly' | 'yearly' | 'pay-as-you-go';
+    startDate: string;
+    endDate: string;
+  };
+  photoUrl?: string;
 }
 
 export interface School {
@@ -39,4 +46,16 @@ export interface ClassFormData {
   isRecurring: boolean;
   level: 'beginner' | 'intermediate' | 'advanced';
   description?: string;
+}
+
+export interface StudentCredit {
+  type: 'credits';
+  amount: number;
+}
+
+export interface StudentSubscription {
+  type: 'subscription';
+  plan: 'monthly' | 'quarterly' | 'yearly' | 'pay-as-you-go';
+  startDate: string;
+  endDate: string;
 }

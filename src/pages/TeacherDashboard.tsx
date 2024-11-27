@@ -1,11 +1,12 @@
 import React, { useEffect } from 'react';
 import { isFuture, parseISO } from 'date-fns';
-import { Plus, ChevronDown } from 'lucide-react';
+import { Plus, ChevronDown, Users } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { ClassCard } from '../components/ClassCard';
 import { ClassForm } from '../components/ClassForm';
 import { SchoolForm } from '../components/SchoolForm';
 import { SchoolSelect } from '../components/SchoolSelect';
+import { StudentManagement } from './StudentManagement';
 import { Class, ClassFormData } from '../types';
 
 const ITEMS_PER_PAGE = 10;
@@ -14,6 +15,7 @@ export function TeacherDashboard() {
   const { user, classes, addClass, fetchClasses } = useStore();
   const [showClassForm, setShowClassForm] = React.useState(false);
   const [showSchoolForm, setShowSchoolForm] = React.useState(false);
+  const [showStudentManagement, setShowStudentManagement] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(true);
   const [visibleClasses, setVisibleClasses] = React.useState(ITEMS_PER_PAGE);
 
@@ -98,17 +100,42 @@ export function TeacherDashboard() {
     );
   }
 
+  if (showStudentManagement) {
+    return (
+      <div>
+        <div className="mb-6">
+          <button
+            onClick={() => setShowStudentManagement(false)}
+            className="text-sm text-purple-600 hover:text-purple-700"
+          >
+            ← Retour aux cours
+          </button>
+        </div>
+        <StudentManagement />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-900">Mes cours sur l'année à venir</h2>
-        <button
-          onClick={() => setShowClassForm(!showClassForm)}
-          className="inline-flex items-center px-4 py-2 rounded-md bg-purple-600 text-white hover:bg-purple-700 transition-colors"
-        >
-          <Plus className="w-5 h-5 mr-2" />
-          Nouveau cours
-        </button>
+        <div className="flex space-x-4">
+          <button
+            onClick={() => setShowStudentManagement(true)}
+            className="inline-flex items-center px-4 py-2 rounded-md bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            <Users className="w-5 h-5 mr-2" />
+            Gérer les élèves
+          </button>
+          <button
+            onClick={() => setShowClassForm(!showClassForm)}
+            className="inline-flex items-center px-4 py-2 rounded-md bg-purple-600 text-white hover:bg-purple-700 transition-colors"
+          >
+            <Plus className="w-5 h-5 mr-2" />
+            Nouveau cours
+          </button>
+        </div>
       </div>
 
       {showClassForm && (

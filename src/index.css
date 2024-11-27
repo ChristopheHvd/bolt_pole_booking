@@ -26,3 +26,9 @@
            focus:border-purple-500 focus:ring-purple-500;
   }
 }
+
+/* Leaflet styles */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+}

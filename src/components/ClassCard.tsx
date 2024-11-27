@@ -128,7 +128,7 @@ export function ClassCard({ classData }: ClassCardProps) {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow relative">
+    <div className={`bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow relative ${isFull ? 'opacity-75' : ''}`}>
       {showDeleteConfirm && (
         <ConfirmDialog
           title="Confirmation de suppression"
@@ -225,7 +225,7 @@ export function ClassCard({ classData }: ClassCardProps) {
           <Users className="w-4 h-4 mr-2 flex-shrink-0" />
           <span className="text-sm">
             {availableSpots > 0 
-              ? `${availableSpots} place${availableSpots > 1 ? 's' : ''} disponible${availableSpots > 1 ? 's' : ''}`
+              ? `${availableSpots} place${availableSpots > 1 ? 's' : ''} restante${availableSpots > 1 ? 's' : ''}`
               : 'Complet'}
           </span>
         </div>
@@ -255,7 +255,7 @@ export function ClassCard({ classData }: ClassCardProps) {
           disabled={(!isEnrolled && isFull) || isLoading}
           className={`w-full flex justify-center items-center py-2 px-4 rounded-md transition-colors ${
             isEnrolled
-              ? 'bg-red-500 hover:bg-red-600 text-white'
+              ? 'text-gray-700 hover:text-red-600 bg-gray-100 hover:bg-red-50'
               : isFull
               ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
               : 'bg-purple-500 hover:bg-purple-600 text-white'

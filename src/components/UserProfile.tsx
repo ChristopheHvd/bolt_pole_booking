@@ -3,7 +3,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useStore } from '../store/useStore';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertTriangle } from 'lucide-react';
+import { ConfirmDialog } from './ConfirmDialog';
 
 const createProfileSchema = (initialEmail: string) => z.object({
   name: z.string().min(2, 'Le nom doit faire au moins 2 caractères'),
@@ -12,7 +13,6 @@ const createProfileSchema = (initialEmail: string) => z.object({
   newPassword: z.string().optional(),
   confirmPassword: z.string().optional(),
 }).superRefine((data, ctx) => {
-  // Le mot de passe actuel est requis uniquement si l'email est modifié ou si un nouveau mot de passe est fourni
   if ((data.email !== initialEmail || data.newPassword) && !data.currentPassword) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -21,7 +21,6 @@ const createProfileSchema = (initialEmail: string) => z.object({
     });
   }
 
-  // Valider le nouveau mot de passe uniquement s'il est fourni
   if (data.newPassword) {
     if (data.newPassword.length < 6) {
       ctx.addIssue({
@@ -44,8 +43,10 @@ const createProfileSchema = (initialEmail: string) => z.object({
 type ProfileInputs = z.infer<ReturnType<typeof createProfileSchema>>;
 
 export function UserProfile() {
-  const { user, updateProfile } = useStore();
+  const { user, school, updateProfile, leaveSchool } = useStore();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isLeavingSchool, setIsLeavingSchool] = React.useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState(false);
   const initialEmail = user?.email || '';
@@ -95,6 +96,18 @@ export function UserProfile() {
       setError(err instanceof Error ? err.message : 'Une erreur est survenue');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleLeaveSchool = async () => {
+    try {
+      setIsLeavingSchool(true);
+      await leaveSchool();
+      setShowLeaveConfirm(false);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Une erreur s'est produite");
+    } finally {
+      setIsLeavingSchool(false);
     }
   };
 
@@ -204,6 +217,55 @@ export function UserProfile() {
           )}
         </button>
       </form>
+
+      {user?.role === 'student' && school && (
+        <div className="mt-8 pt-6 border-t border-gray-200">
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium text-gray-900">École actuelle</h3>
+            <p className="text-sm text-gray-600">{school.name}</p>
+            
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <AlertTriangle className="h-5 w-5 text-yellow-400" />
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-yellow-700">
+                    En quittant l'école, vous serez automatiquement désinscrit(e) de tous vos cours réservés.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowLeaveConfirm(true)}
+              disabled={isLeavingSchool}
+              className="w-full flex justify-center items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLeavingSchool ? (
+                <>
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                  Désinscription en cours...
+                </>
+              ) : (
+                "Quitter l'école"
+              )}
+            </button>
+          </div>
+
+          {showLeaveConfirm && (
+            <ConfirmDialog
+              title="Confirmation de désinscription"
+              message="Êtes-vous sûr de vouloir quitter cette école ? Cette action est irréversible et vous serez désinscrit(e) de tous vos cours réservés."
+              onConfirmOne={handleLeaveSchool}
+              onClose={() => setShowLeaveConfirm(false)}
+              confirmOneText="Oui, quitter l'école"
+              variant="danger"
+              isLoadingOne={isLeavingSchool}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -30,12 +30,12 @@ export function SchoolForm({ onSubmit, initialData, isEditing = false }: SchoolF
     formState: { errors },
   } = useForm<FormInputs>({
     resolver: zodResolver(schema),
-    defaultValues: initialData || {
-      name: '',
-      address: '',
-      email: '',
-      instagram: '',
-      logo: '',
+    defaultValues: {
+      name: initialData?.name || '',
+      address: initialData?.address || '',
+      email: initialData?.email || '',
+      instagram: initialData?.instagram || '',
+      logo: initialData?.logo || '',
     },
   });
 
@@ -43,6 +43,9 @@ export function SchoolForm({ onSubmit, initialData, isEditing = false }: SchoolF
     try {
       setIsSubmitting(true);
       await onSubmit(data);
+    } catch (error) {
+      console.error('Error submitting form:', error);
+      alert("Une erreur s'est produite. Veuillez réessayer.");
     } finally {
       setIsSubmitting(false);
     }
@@ -99,6 +102,7 @@ export function SchoolForm({ onSubmit, initialData, isEditing = false }: SchoolF
             type="url"
             {...register('logo')}
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
+            placeholder="https://example.com/logo.png"
           />
         </label>
         {errors.logo && (

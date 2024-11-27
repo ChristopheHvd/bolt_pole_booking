@@ -38,7 +38,7 @@ interface Store {
   signUp: (email: string, password: string, name: string, role: 'student' | 'teacher') => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
-  addClass: (newClass: Omit<Class, 'id'>) => Promise<void>;
+  addClass: (newClass: Class) => Promise<void>;
   updateClass: (classId: string, updatedClass: Partial<Class>, updateRecurring: boolean) => Promise<void>;
   deleteClass: (classId: string, deleteRecurring: boolean) => Promise<void>;
   enrollInClass: (classId: string, userId: string, enrollAll: boolean) => Promise<void>;
@@ -59,6 +59,7 @@ interface Store {
   }) => Promise<void>;
   updateStudentCredits: (studentId: string, update: StudentCredit | StudentSubscription) => Promise<void>;
   fetchSchoolStudents: (schoolId: string) => Promise<User[]>;
+  fetchUserById: (userId: string) => Promise<User | null>;
 }
 
 export const useStore = create<Store>((set, get) => ({
@@ -627,6 +628,22 @@ export const useStore = create<Store>((set, get) => ({
       })) as User[];
     } catch (error) {
       console.error('Error fetching school students:', error);
+      throw error;
+    }
+  },
+
+  fetchUserById: async (userId: string) => {
+    try {
+      const userDoc = await getDoc(doc(db, 'users', userId));
+      if (userDoc.exists()) {
+        return {
+          id: userDoc.id,
+          ...userDoc.data()
+        } as User;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching user:', error);
       throw error;
     }
   },

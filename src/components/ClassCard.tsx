@@ -1,11 +1,12 @@
 import React from 'react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isPast } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Users, Clock, CalendarCheck, Repeat, Edit2, Trash2, Loader2 } from 'lucide-react';
-import { Class, ClassFormData } from '../types';
+import { Class, ClassFormData, User } from '../types';
 import { useStore } from '../store/useStore';
 import { ClassForm } from './ClassForm';
 import { ConfirmDialog } from './ConfirmDialog';
+import { EnrolledStudentsList } from './EnrolledStudentsList';
 
 interface ClassCardProps {
   classData: Class;
@@ -17,7 +18,10 @@ export function ClassCard({ classData }: ClassCardProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
   const [showEnrollConfirm, setShowEnrollConfirm] = React.useState(false);
   const [showUnenrollConfirm, setShowUnenrollConfirm] = React.useState(false);
+  const [showStudentsList, setShowStudentsList] = React.useState(false);
+  const [enrolledStudents, setEnrolledStudents] = React.useState<User[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
+  const [isLoadingStudents, setIsLoadingStudents] = React.useState(false);
   const [isDeletingOne, setIsDeletingOne] = React.useState(false);
   const [isDeletingAll, setIsDeletingAll] = React.useState(false);
   const [isEnrollingOne, setIsEnrollingOne] = React.useState(false);
@@ -29,6 +33,7 @@ export function ClassCard({ classData }: ClassCardProps) {
   const isFull = classData.enrolledStudents.length >= classData.maxStudents;
   const availableSpots = classData.maxStudents - classData.enrolledStudents.length;
   const isTeacher = user?.role === 'teacher';
+  const isPastClass = isPast(parseISO(classData.datetime));
 
   const handleEnrollment = async (enrollAll: boolean = false) => {
     if (!user) return;
@@ -99,6 +104,27 @@ export function ClassCard({ classData }: ClassCardProps) {
     }
   };
 
+  const handleShowStudents = async () => {
+    if (!isTeacher) return;
+    
+    try {
+      setIsLoadingStudents(true);
+      setShowStudentsList(true);
+      // Fetch enrolled students details
+      const students = await Promise.all(
+        classData.enrolledStudents.map(async (studentId) => {
+          const userDoc = await useStore.getState().fetchUserById(studentId);
+          return userDoc as User;
+        })
+      );
+      setEnrolledStudents(students);
+    } catch (error) {
+      console.error('Error fetching enrolled students:', error);
+    } finally {
+      setIsLoadingStudents(false);
+    }
+  };
+
   const levelLabels = {
     beginner: 'Débutant',
     intermediate: 'Intermédiaire',
@@ -128,7 +154,7 @@ export function ClassCard({ classData }: ClassCardProps) {
   }
 
   return (
-    <div className={`bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow relative ${isFull ? 'opacity-75' : ''}`}>
+    <div className={`bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow relative ${isFull && !isEnrolled ? 'opacity-75' : ''}`}>
       {showDeleteConfirm && (
         <ConfirmDialog
           title="Confirmation de suppression"
@@ -173,6 +199,14 @@ export function ClassCard({ classData }: ClassCardProps) {
           isLoadingOne={isUnenrollingOne}
           isLoadingAll={isUnenrollingAll}
           variant="danger"
+        />
+      )}
+
+      {showStudentsList && (
+        <EnrolledStudentsList
+          students={enrolledStudents}
+          onClose={() => setShowStudentsList(false)}
+          isLoading={isLoadingStudents}
         />
       )}
 
@@ -223,11 +257,26 @@ export function ClassCard({ classData }: ClassCardProps) {
         </div>
         <div className="flex items-center text-gray-600">
           <Users className="w-4 h-4 mr-2 flex-shrink-0" />
-          <span className="text-sm">
-            {availableSpots > 0 
-              ? `${availableSpots} place${availableSpots > 1 ? 's' : ''} restante${availableSpots > 1 ? 's' : ''}`
-              : 'Complet'}
-          </span>
+          {isTeacher ? (
+            <button
+              onClick={handleShowStudents}
+              disabled={isLoadingStudents}
+              className="text-sm text-purple-600 hover:text-purple-700 flex items-center"
+            >
+              {isLoadingStudents ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-1" />
+              ) : null}
+              {availableSpots > 0 
+                ? `${availableSpots} place${availableSpots > 1 ? 's' : ''} restante${availableSpots > 1 ? 's' : ''}`
+                : 'Complet'}
+            </button>
+          ) : (
+            <span className="text-sm">
+              {availableSpots > 0 
+                ? `${availableSpots} place${availableSpots > 1 ? 's' : ''} restante${availableSpots > 1 ? 's' : ''}`
+                : 'Complet'}
+            </span>
+          )}
         </div>
       </div>
 
@@ -235,7 +284,7 @@ export function ClassCard({ classData }: ClassCardProps) {
         <p className="text-sm text-gray-600 mb-4">{classData.description}</p>
       )}
 
-      {user?.role === 'student' && (
+      {user?.role === 'student' && !isPastClass && (
         <button
           onClick={() => {
             if (isEnrolled) {
@@ -255,9 +304,9 @@ export function ClassCard({ classData }: ClassCardProps) {
           disabled={(!isEnrolled && isFull) || isLoading}
           className={`w-full flex justify-center items-center py-2 px-4 rounded-md transition-colors ${
             isEnrolled
-              ? 'text-gray-700 hover:text-red-600 bg-gray-100 hover:bg-red-50'
+              ? 'text-gray-500 hover:text-red-600 bg-gray-50 hover:bg-red-50'
               : isFull
-              ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
               : 'bg-purple-500 hover:bg-purple-600 text-white'
           } disabled:opacity-50 disabled:cursor-not-allowed`}
         >
